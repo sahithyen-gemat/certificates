@@ -255,7 +255,7 @@ func (p *X5C) AuthorizeSign(ctx context.Context, token string) ([]SignOption, er
 		commonNameValidator(claims.Subject),
 		newDefaultSANsValidator(ctx, claims.SANs),
 		defaultPublicKeyValidator{},
-		newValidityValidator(p.ctl.Claimer.MinTLSCertDuration(), p.ctl.Claimer.MaxTLSCertDuration()),
+		newValidityValidator(p.ctl.Claimer.MinTLSCertDuration(), p.ctl.Claimer.MaxTLSCertDuration(), p.ctl.Claimer.AllowNoExpiryCert()),
 		newX509NamePolicyValidator(p.ctl.getPolicy().getX509()),
 		p.ctl.newWebhookController(
 			data,

@@ -171,7 +171,7 @@ func (p *Nebula) AuthorizeSign(_ context.Context, token string) ([]SignOption, e
 			Networks: crt.Networks(),
 		},
 		defaultPublicKeyValidator{},
-		newValidityValidator(p.ctl.Claimer.MinTLSCertDuration(), p.ctl.Claimer.MaxTLSCertDuration()),
+		newValidityValidator(p.ctl.Claimer.MinTLSCertDuration(), p.ctl.Claimer.MaxTLSCertDuration(), p.ctl.Claimer.AllowNoExpiryCert()),
 		newX509NamePolicyValidator(p.ctl.getPolicy().getX509()),
 		p.ctl.newWebhookController(data, linkedca.Webhook_X509),
 	}, nil

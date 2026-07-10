@@ -419,7 +419,7 @@ func (s *SCEP) AuthorizeSign(context.Context, string) ([]SignOption, error) {
 		profileDefaultDuration(s.ctl.Claimer.DefaultTLSCertDuration()),
 		// validators
 		newPublicKeyMinimumLengthValidator(s.MinimumPublicKeyLength),
-		newValidityValidator(s.ctl.Claimer.MinTLSCertDuration(), s.ctl.Claimer.MaxTLSCertDuration()),
+		newValidityValidator(s.ctl.Claimer.MinTLSCertDuration(), s.ctl.Claimer.MaxTLSCertDuration(), s.ctl.Claimer.AllowNoExpiryCert()),
 		newX509NamePolicyValidator(s.ctl.getPolicy().getX509()),
 		s.ctl.newWebhookController(nil, linkedca.Webhook_X509),
 	}, nil

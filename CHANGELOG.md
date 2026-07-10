@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 
+- Add `allowNoExpiryCert` provisioner claim to opt in to issuing certificates
+  with the RFC 5280 Section 4.1.2.5 "no well-defined expiration date" sentinel
+  value
+
 ### Changed
 
 ### Deprecated

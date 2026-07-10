@@ -588,6 +588,12 @@ $ step ca provisioner list | jq '.[3].claims'
 Certificates with different validity periods can be generated using the respective provisioners.
 The durations are strings which are a sequence of decimal numbers, each with optional fraction and a unit suffix, such as "300ms" or "2h45m". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
+A provisioner can also be configured with `"allowNoExpiryCert": true` to allow
+requests for certificates using the RFC 5280 Section 4.1.2.5 sentinel value
+for "no well-defined expiration date" (`NotAfter` of `9999-12-31T23:59:59Z`).
+This bypasses the provisioner's `maxTLSCertDuration` for that specific
+request only; it defaults to `false` and must be opted into per provisioner.
+
 Please see [Getting Started](https://github.com/smallstep/certificates/blob/master/docs/GETTING_STARTED.md) in the docs directory to learn what custom claims configuration options are available and how to use them.
 
 ```sh

@@ -26,6 +26,11 @@ import (
 // DefaultCertValidity is the default validity for a certificate if none is specified.
 const DefaultCertValidity = 24 * time.Hour
 
+// NoWellDefinedExpiration is the value RFC 5280 Section 4.1.2.5 reserves in
+// GeneralizedTime (99991231235959Z) to indicate that a certificate has no
+// well-defined expiration date.
+var NoWellDefinedExpiration = time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
+
 // SignOptions contains the options that can be passed to the Sign method. Backdate
 // is automatically filled and can only be configured in the CA.
 type SignOptions struct {
@@ -399,13 +404,14 @@ func (v profileLimitDuration) Modify(cert *x509.Certificate, so SignOptions) err
 
 // validityValidator validates the certificate validity settings.
 type validityValidator struct {
-	min time.Duration
-	max time.Duration
+	min           time.Duration
+	max           time.Duration
+	allowNoExpiry bool
 }
 
 // newValidityValidator return a new validity validator.
-func newValidityValidator(minDur, maxDur time.Duration) *validityValidator {
-	return &validityValidator{min: minDur, max: maxDur}
+func newValidityValidator(minDur, maxDur time.Duration, allowNoExpiry bool) *validityValidator {
+	return &validityValidator{min: minDur, max: maxDur, allowNoExpiry: allowNoExpiry}
 }
 
 // Valid validates the certificate validity settings (notBefore/notAfter) and
@@ -417,14 +423,22 @@ func (v *validityValidator) Valid(cert *x509.Certificate, o SignOptions) error {
 		now = time.Now().Truncate(time.Second)
 	)
 
-	d := na.Sub(nb)
-
 	if na.Before(now) {
 		return errs.BadRequest("notAfter cannot be in the past; na=%v", na)
 	}
 	if na.Before(nb) {
 		return errs.BadRequest("notAfter cannot be before notBefore; na=%v, nb=%v", na, nb)
 	}
+
+	// RFC 5280 Section 4.1.2.5 reserves a specific GeneralizedTime value to
+	// mean "no well-defined expiration date". Certificates requesting it are
+	// exempt from the min/max duration checks below, but only for
+	// provisioners that have explicitly opted in.
+	if v.allowNoExpiry && na.Equal(NoWellDefinedExpiration) {
+		return nil
+	}
+
+	d := na.Sub(nb)
 	if d < v.min {
 		return errs.Forbidden("requested duration of %v is less than the authorized minimum certificate duration of %v", d, v.min)
 	}

@@ -392,7 +392,7 @@ func Test_validityValidator_Valid(t *testing.T) {
 	tests := map[string]func() test{
 		"fail/notAfter-past": func() test {
 			return test{
-				vv:   &validityValidator{5 * time.Minute, 24 * time.Hour},
+				vv:   &validityValidator{min: 5 * time.Minute, max: 24 * time.Hour},
 				cert: &x509.Certificate{NotAfter: time.Now().Add(-5 * time.Minute)},
 				opts: SignOptions{},
 				err:  errors.New("notAfter cannot be in the past"),
@@ -400,7 +400,7 @@ func Test_validityValidator_Valid(t *testing.T) {
 		},
 		"fail/notBefore-after-notAfter": func() test {
 			return test{
-				vv: &validityValidator{5 * time.Minute, 24 * time.Hour},
+				vv: &validityValidator{min: 5 * time.Minute, max: 24 * time.Hour},
 				cert: &x509.Certificate{NotBefore: time.Now().Add(10 * time.Minute),
 					NotAfter: time.Now().Add(5 * time.Minute)},
 				opts: SignOptions{},
@@ -410,7 +410,7 @@ func Test_validityValidator_Valid(t *testing.T) {
 		"fail/duration-too-short": func() test {
 			n := now()
 			return test{
-				vv: &validityValidator{5 * time.Minute, 24 * time.Hour},
+				vv: &validityValidator{min: 5 * time.Minute, max: 24 * time.Hour},
 				cert: &x509.Certificate{NotBefore: n,
 					NotAfter: n.Add(3 * time.Minute)},
 				opts: SignOptions{},
@@ -420,7 +420,7 @@ func Test_validityValidator_Valid(t *testing.T) {
 		"ok/duration-exactly-min": func() test {
 			n := now()
 			return test{
-				vv: &validityValidator{5 * time.Minute, 24 * time.Hour},
+				vv: &validityValidator{min: 5 * time.Minute, max: 24 * time.Hour},
 				cert: &x509.Certificate{NotBefore: n,
 					NotAfter: n.Add(5 * time.Minute)},
 				opts: SignOptions{},
@@ -429,7 +429,7 @@ func Test_validityValidator_Valid(t *testing.T) {
 		"fail/duration-too-great": func() test {
 			n := now()
 			return test{
-				vv: &validityValidator{5 * time.Minute, 24 * time.Hour},
+				vv: &validityValidator{min: 5 * time.Minute, max: 24 * time.Hour},
 				cert: &x509.Certificate{NotBefore: n,
 					NotAfter: n.Add(24*time.Hour + time.Second)},
 				err: errors.New("is more than the authorized maximum certificate duration of "),
@@ -438,7 +438,7 @@ func Test_validityValidator_Valid(t *testing.T) {
 		"ok/duration-exactly-max": func() test {
 			n := time.Now()
 			return test{
-				vv: &validityValidator{5 * time.Minute, 24 * time.Hour},
+				vv: &validityValidator{min: 5 * time.Minute, max: 24 * time.Hour},
 				cert: &x509.Certificate{NotBefore: n,
 					NotAfter: n.Add(24 * time.Hour)},
 			}
@@ -448,7 +448,7 @@ func Test_validityValidator_Valid(t *testing.T) {
 			cert := &x509.Certificate{NotBefore: now, NotAfter: now.Add(5 * time.Minute)}
 			time.Sleep(time.Second)
 			return test{
-				vv:   &validityValidator{5 * time.Minute, 24 * time.Hour},
+				vv:   &validityValidator{min: 5 * time.Minute, max: 24 * time.Hour},
 				cert: cert,
 				opts: SignOptions{Backdate: time.Second},
 			}
@@ -459,9 +459,35 @@ func Test_validityValidator_Valid(t *testing.T) {
 			cert := &x509.Certificate{NotBefore: now, NotAfter: now.Add(24*time.Hour + backdate)}
 			time.Sleep(backdate)
 			return test{
-				vv:   &validityValidator{5 * time.Minute, 24 * time.Hour},
+				vv:   &validityValidator{min: 5 * time.Minute, max: 24 * time.Hour},
 				cert: cert,
 				opts: SignOptions{Backdate: backdate},
+			}
+		},
+		"ok/no-well-defined-expiration-allowed": func() test {
+			n := time.Now()
+			return test{
+				vv:   &validityValidator{min: 5 * time.Minute, max: 24 * time.Hour, allowNoExpiry: true},
+				cert: &x509.Certificate{NotBefore: n, NotAfter: NoWellDefinedExpiration},
+				opts: SignOptions{},
+			}
+		},
+		"fail/no-well-defined-expiration-not-allowed": func() test {
+			n := time.Now()
+			return test{
+				vv:   &validityValidator{min: 5 * time.Minute, max: 24 * time.Hour, allowNoExpiry: false},
+				cert: &x509.Certificate{NotBefore: n, NotAfter: NoWellDefinedExpiration},
+				opts: SignOptions{},
+				err:  errors.New("is more than the authorized maximum certificate duration of "),
+			}
+		},
+		"fail/almost-no-well-defined-expiration": func() test {
+			n := time.Now()
+			return test{
+				vv:   &validityValidator{min: 5 * time.Minute, max: 24 * time.Hour, allowNoExpiry: true},
+				cert: &x509.Certificate{NotBefore: n, NotAfter: NoWellDefinedExpiration.Add(-time.Second)},
+				opts: SignOptions{},
+				err:  errors.New("is more than the authorized maximum certificate duration of "),
 			}
 		},
 	}

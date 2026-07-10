@@ -206,7 +206,7 @@ func (p *JWK) AuthorizeSign(ctx context.Context, token string) ([]SignOption, er
 		commonNameSliceValidator(append([]string{claims.Subject}, claims.SANs...)),
 		defaultPublicKeyValidator{},
 		newDefaultSANsValidator(ctx, claims.SANs),
-		newValidityValidator(p.ctl.Claimer.MinTLSCertDuration(), p.ctl.Claimer.MaxTLSCertDuration()),
+		newValidityValidator(p.ctl.Claimer.MinTLSCertDuration(), p.ctl.Claimer.MaxTLSCertDuration(), p.ctl.Claimer.AllowNoExpiryCert()),
 		newX509NamePolicyValidator(p.ctl.getPolicy().getX509()),
 		p.ctl.newWebhookController(data, linkedca.Webhook_X509),
 	}, nil
