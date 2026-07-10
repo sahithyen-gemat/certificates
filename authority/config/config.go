@@ -39,6 +39,10 @@ var (
 	// DefaultDisableSmallstepExtensions is the default value for the
 	// DisableSmallstepExtensions provisioner claim.
 	DefaultDisableSmallstepExtensions = false
+	// DefaultAllowNoExpiryCert disallows certificates using the RFC 5280
+	// "no well-defined expiration date" sentinel value unless a provisioner
+	// opts in.
+	DefaultAllowNoExpiryCert = false
 	// DefaultCRLCacheDuration is the default cache duration for the CRL.
 	DefaultCRLCacheDuration = &provisioner.Duration{Duration: 24 * time.Hour}
 	// DefaultCRLExpiredDuration is the default duration in which expired
@@ -50,6 +54,7 @@ var (
 		MinTLSDur:                  &provisioner.Duration{Duration: 5 * time.Minute}, // TLS certs
 		MaxTLSDur:                  &provisioner.Duration{Duration: 24 * time.Hour},
 		DefaultTLSDur:              &provisioner.Duration{Duration: 24 * time.Hour},
+		AllowNoExpiryCert:          &DefaultAllowNoExpiryCert,
 		MinUserSSHDur:              &provisioner.Duration{Duration: 5 * time.Minute}, // User SSH certs
 		MaxUserSSHDur:              &provisioner.Duration{Duration: 24 * time.Hour},
 		DefaultUserSSHDur:          &provisioner.Duration{Duration: 16 * time.Hour},

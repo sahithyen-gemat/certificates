@@ -49,3 +49,32 @@ func TestClaimer_DefaultSSHCertDuration(t *testing.T) {
 		})
 	}
 }
+
+func TestClaimer_AllowNoExpiryCert(t *testing.T) {
+	trueValue := true
+	falseValue := false
+	type fields struct {
+		global Claims
+		claims *Claims
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   bool
+	}{
+		{"global default", fields{globalProvisionerClaims, nil}, false},
+		{"provisioner override true", fields{globalProvisionerClaims, &Claims{AllowNoExpiryCert: &trueValue}}, true},
+		{"provisioner override false", fields{globalProvisionerClaims, &Claims{AllowNoExpiryCert: &falseValue}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Claimer{
+				global: tt.fields.global,
+				claims: tt.fields.claims,
+			}
+			if got := c.AllowNoExpiryCert(); got != tt.want {
+				t.Errorf("Claimer.AllowNoExpiryCert() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

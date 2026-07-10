@@ -10,9 +10,10 @@ import (
 // Claims so that individual provisioners can override global claims.
 type Claims struct {
 	// TLS CA properties
-	MinTLSDur     *Duration `json:"minTLSCertDuration,omitempty"`
-	MaxTLSDur     *Duration `json:"maxTLSCertDuration,omitempty"`
-	DefaultTLSDur *Duration `json:"defaultTLSCertDuration,omitempty"`
+	MinTLSDur         *Duration `json:"minTLSCertDuration,omitempty"`
+	MaxTLSDur         *Duration `json:"maxTLSCertDuration,omitempty"`
+	DefaultTLSDur     *Duration `json:"defaultTLSCertDuration,omitempty"`
+	AllowNoExpiryCert *bool     `json:"allowNoExpiryCert,omitempty"`
 
 	// SSH CA properties
 	MinUserSSHDur     *Duration `json:"minUserSSHCertDuration,omitempty"`
@@ -49,6 +50,7 @@ func NewClaimer(claims *Claims, global Claims) (*Claimer, error) {
 func (c *Claimer) Claims() Claims {
 	disableRenewal := c.IsDisableRenewal()
 	allowRenewalAfterExpiry := c.AllowRenewalAfterExpiry()
+	allowNoExpiryCert := c.AllowNoExpiryCert()
 	enableSSHCA := c.IsSSHCAEnabled()
 	disableSmallstepExtensions := c.IsDisableSmallstepExtensions()
 
@@ -56,6 +58,7 @@ func (c *Claimer) Claims() Claims {
 		MinTLSDur:                  &Duration{c.MinTLSCertDuration()},
 		MaxTLSDur:                  &Duration{c.MaxTLSCertDuration()},
 		DefaultTLSDur:              &Duration{c.DefaultTLSCertDuration()},
+		AllowNoExpiryCert:          &allowNoExpiryCert,
 		MinUserSSHDur:              &Duration{c.MinUserSSHCertDuration()},
 		MaxUserSSHDur:              &Duration{c.MaxUserSSHCertDuration()},
 		DefaultUserSSHDur:          &Duration{c.DefaultUserSSHCertDuration()},
@@ -103,6 +106,17 @@ func (c *Claimer) MaxTLSCertDuration() time.Duration {
 		return c.global.MaxTLSDur.Duration
 	}
 	return c.claims.MaxTLSDur.Duration
+}
+
+// AllowNoExpiryCert returns whether the provisioner allows issuing
+// certificates that use the RFC 5280 Section 4.1.2.5 sentinel value for "no
+// well-defined expiration date". If not set within the provisioner, then the
+// global value from the authority configuration will be used.
+func (c *Claimer) AllowNoExpiryCert() bool {
+	if c.claims == nil || c.claims.AllowNoExpiryCert == nil {
+		return *c.global.AllowNoExpiryCert
+	}
+	return *c.claims.AllowNoExpiryCert
 }
 
 // IsDisableRenewal returns if the renewal flow is disabled for the

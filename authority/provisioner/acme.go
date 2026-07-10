@@ -325,7 +325,7 @@ func (p *ACME) AuthorizeSign(context.Context, string) ([]SignOption, error) {
 		profileDefaultDuration(p.ctl.Claimer.DefaultTLSCertDuration()),
 		// validators
 		defaultPublicKeyValidator{},
-		newValidityValidator(p.ctl.Claimer.MinTLSCertDuration(), p.ctl.Claimer.MaxTLSCertDuration()),
+		newValidityValidator(p.ctl.Claimer.MinTLSCertDuration(), p.ctl.Claimer.MaxTLSCertDuration(), p.ctl.Claimer.AllowNoExpiryCert()),
 		newX509NamePolicyValidator(p.ctl.getPolicy().getX509()),
 		p.ctl.newWebhookController(nil, linkedca.Webhook_X509),
 	}

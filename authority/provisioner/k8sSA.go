@@ -242,7 +242,7 @@ func (p *K8sSA) AuthorizeSign(_ context.Context, token string) ([]SignOption, er
 		profileDefaultDuration(p.ctl.Claimer.DefaultTLSCertDuration()),
 		// validators
 		defaultPublicKeyValidator{},
-		newValidityValidator(p.ctl.Claimer.MinTLSCertDuration(), p.ctl.Claimer.MaxTLSCertDuration()),
+		newValidityValidator(p.ctl.Claimer.MinTLSCertDuration(), p.ctl.Claimer.MaxTLSCertDuration(), p.ctl.Claimer.AllowNoExpiryCert()),
 		newX509NamePolicyValidator(p.ctl.getPolicy().getX509()),
 		p.ctl.newWebhookController(data, linkedca.Webhook_X509),
 	}, nil

@@ -28,12 +28,14 @@ import (
 var (
 	defaultDisableRenewal             = false
 	defaultAllowRenewalAfterExpiry    = false
+	defaultAllowNoExpiryCert          = false
 	defaultEnableSSHCA                = true
 	defaultDisableSmallstepExtensions = false
 	globalProvisionerClaims           = Claims{
 		MinTLSDur:                  &Duration{5 * time.Minute},
 		MaxTLSDur:                  &Duration{24 * time.Hour},
 		DefaultTLSDur:              &Duration{24 * time.Hour},
+		AllowNoExpiryCert:          &defaultAllowNoExpiryCert,
 		MinUserSSHDur:              &Duration{Duration: 5 * time.Minute}, // User SSH certs
 		MaxUserSSHDur:              &Duration{Duration: 24 * time.Hour},
 		DefaultUserSSHDur:          &Duration{Duration: 16 * time.Hour},

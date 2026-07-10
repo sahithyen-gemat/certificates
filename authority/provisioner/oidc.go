@@ -363,7 +363,7 @@ func (o *OIDC) AuthorizeSign(_ context.Context, token string) ([]SignOption, err
 		profileDefaultDuration(o.ctl.Claimer.DefaultTLSCertDuration()),
 		// validators
 		defaultPublicKeyValidator{},
-		newValidityValidator(o.ctl.Claimer.MinTLSCertDuration(), o.ctl.Claimer.MaxTLSCertDuration()),
+		newValidityValidator(o.ctl.Claimer.MinTLSCertDuration(), o.ctl.Claimer.MaxTLSCertDuration(), o.ctl.Claimer.AllowNoExpiryCert()),
 		newX509NamePolicyValidator(o.ctl.getPolicy().getX509()),
 		// webhooks
 		o.ctl.newWebhookController(data, linkedca.Webhook_X509),
