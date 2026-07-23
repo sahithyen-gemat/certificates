@@ -84,6 +84,7 @@ type Config struct {
 	Monitoring       json.RawMessage      `json:"monitoring,omitempty"`
 	AuthorityConfig  *AuthConfig          `json:"authority,omitempty"`
 	TLS              *TLSOptions          `json:"tls,omitempty"`
+	DisableTLS       bool                 `json:"disableTLS,omitempty"`
 	Password         string               `json:"password,omitempty"`
 	Templates        *templates.Templates `json:"templates,omitempty"`
 	CommonName       string               `json:"commonName,omitempty"`
@@ -248,7 +249,7 @@ func (c *Config) Init() {
 	if c.DNSNames == nil {
 		c.DNSNames = []string{"localhost", "127.0.0.1", "::1"}
 	}
-	if c.TLS == nil {
+	if c.TLS == nil && !c.DisableTLS {
 		c.TLS = &DefaultTLSOptions
 	}
 	if c.AuthorityConfig == nil {
@@ -339,22 +340,24 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.TLS == nil {
-		c.TLS = &DefaultTLSOptions
-	} else {
-		if len(c.TLS.CipherSuites) == 0 {
-			c.TLS.CipherSuites = DefaultTLSOptions.CipherSuites
+	if !c.DisableTLS {
+		if c.TLS == nil {
+			c.TLS = &DefaultTLSOptions
+		} else {
+			if len(c.TLS.CipherSuites) == 0 {
+				c.TLS.CipherSuites = DefaultTLSOptions.CipherSuites
+			}
+			if c.TLS.MaxVersion == 0 {
+				c.TLS.MaxVersion = DefaultTLSOptions.MaxVersion
+			}
+			if c.TLS.MinVersion == 0 {
+				c.TLS.MinVersion = DefaultTLSOptions.MinVersion
+			}
+			if c.TLS.MinVersion > c.TLS.MaxVersion {
+				return errors.New("tls minVersion cannot exceed tls maxVersion")
+			}
+			c.TLS.Renegotiation = c.TLS.Renegotiation || DefaultTLSOptions.Renegotiation
 		}
-		if c.TLS.MaxVersion == 0 {
-			c.TLS.MaxVersion = DefaultTLSOptions.MaxVersion
-		}
-		if c.TLS.MinVersion == 0 {
-			c.TLS.MinVersion = DefaultTLSOptions.MinVersion
-		}
-		if c.TLS.MinVersion > c.TLS.MaxVersion {
-			return errors.New("tls minVersion cannot exceed tls maxVersion")
-		}
-		c.TLS.Renegotiation = c.TLS.Renegotiation || DefaultTLSOptions.Renegotiation
 	}
 
 	// Validate KMS options, nil is ok.
@@ -397,44 +400,55 @@ func (c *Config) GetAudiences() provisioner.Audiences {
 		SSHRenew:  []string{},
 	}
 
+	scheme := c.scheme()
 	for _, name := range c.DNSNames {
 		hostname := toHostname(name)
 		audiences.Sign = append(audiences.Sign,
-			fmt.Sprintf("https://%s/1.0/sign", hostname),
-			fmt.Sprintf("https://%s/sign", hostname),
-			fmt.Sprintf("https://%s/1.0/ssh/sign", hostname),
-			fmt.Sprintf("https://%s/ssh/sign", hostname))
+			fmt.Sprintf("%s://%s/1.0/sign", scheme, hostname),
+			fmt.Sprintf("%s://%s/sign", scheme, hostname),
+			fmt.Sprintf("%s://%s/1.0/ssh/sign", scheme, hostname),
+			fmt.Sprintf("%s://%s/ssh/sign", scheme, hostname))
 		audiences.Renew = append(audiences.Renew,
-			fmt.Sprintf("https://%s/1.0/renew", hostname),
-			fmt.Sprintf("https://%s/renew", hostname))
+			fmt.Sprintf("%s://%s/1.0/renew", scheme, hostname),
+			fmt.Sprintf("%s://%s/renew", scheme, hostname))
 		audiences.Revoke = append(audiences.Revoke,
-			fmt.Sprintf("https://%s/1.0/revoke", hostname),
-			fmt.Sprintf("https://%s/revoke", hostname))
+			fmt.Sprintf("%s://%s/1.0/revoke", scheme, hostname),
+			fmt.Sprintf("%s://%s/revoke", scheme, hostname))
 		audiences.SSHSign = append(audiences.SSHSign,
-			fmt.Sprintf("https://%s/1.0/ssh/sign", hostname),
-			fmt.Sprintf("https://%s/ssh/sign", hostname),
-			fmt.Sprintf("https://%s/1.0/sign", hostname),
-			fmt.Sprintf("https://%s/sign", hostname))
+			fmt.Sprintf("%s://%s/1.0/ssh/sign", scheme, hostname),
+			fmt.Sprintf("%s://%s/ssh/sign", scheme, hostname),
+			fmt.Sprintf("%s://%s/1.0/sign", scheme, hostname),
+			fmt.Sprintf("%s://%s/sign", scheme, hostname))
 		audiences.SSHRevoke = append(audiences.SSHRevoke,
-			fmt.Sprintf("https://%s/1.0/ssh/revoke", hostname),
-			fmt.Sprintf("https://%s/ssh/revoke", hostname))
+			fmt.Sprintf("%s://%s/1.0/ssh/revoke", scheme, hostname),
+			fmt.Sprintf("%s://%s/ssh/revoke", scheme, hostname))
 		audiences.SSHRenew = append(audiences.SSHRenew,
-			fmt.Sprintf("https://%s/1.0/ssh/renew", hostname),
-			fmt.Sprintf("https://%s/ssh/renew", hostname))
+			fmt.Sprintf("%s://%s/1.0/ssh/renew", scheme, hostname),
+			fmt.Sprintf("%s://%s/ssh/renew", scheme, hostname))
 		audiences.SSHRekey = append(audiences.SSHRekey,
-			fmt.Sprintf("https://%s/1.0/ssh/rekey", hostname),
-			fmt.Sprintf("https://%s/ssh/rekey", hostname))
+			fmt.Sprintf("%s://%s/1.0/ssh/rekey", scheme, hostname),
+			fmt.Sprintf("%s://%s/ssh/rekey", scheme, hostname))
 	}
 
 	return audiences
 }
 
+// scheme returns the URL scheme used to reach the CA over its primary
+// Address, which depends on whether TLS has been disabled.
+func (c *Config) scheme() string {
+	if c.DisableTLS {
+		return "http"
+	}
+	return "https"
+}
+
 // Audience returns the list of audiences for a given path.
 func (c *Config) Audience(path string) []string {
 	audiences := make([]string, len(c.DNSNames)+1)
+	scheme := c.scheme()
 	for i, name := range c.DNSNames {
 		hostname := toHostname(name)
-		audiences[i] = "https://" + hostname + path
+		audiences[i] = scheme + "://" + hostname + path
 	}
 	// For backward compatibility
 	audiences[len(c.DNSNames)] = path

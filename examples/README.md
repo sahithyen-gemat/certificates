@@ -298,6 +298,35 @@ Server responded: Hello Mike at 2018-11-07 21:54:02.141578 +0000 UTC!!!
 ...
 ```
 
+## Disable TLS on the primary server
+
+By default step-ca serves its primary API (`address` in `ca.json`) over
+HTTPS, dynamically signing its own server certificate with the intermediate
+CA key on startup. Setting `"disableTLS": true` in `ca.json` switches this
+port to plain, unencrypted HTTP and skips generating that server certificate
+entirely:
+
+```json
+{
+	"address": "127.0.0.1:9000",
+	"disableTLS": true,
+	...
+}
+```
+
+This is intended for deployments that terminate TLS in front of step-ca
+(e.g. a reverse proxy or service mesh sidecar). Because the primary port no
+longer performs a TLS handshake, endpoints that rely on mutual TLS for
+authentication behave differently:
+
+- `POST /rekey` requires a client certificate and will always fail.
+- `POST /renew` and `POST /revoke` fall back to their bearer-token flows;
+  mTLS self-renewal no longer works, but RA-style and token-based
+  renewal/revocation still do.
+
+`insecureAddress` is unrelated to this setting: it configures a second,
+always-plain listener used only for SCEP and CRL endpoints.
+
 ## Certificate rotation
 
 We can use the bootstrap-server to demonstrate certificate rotation. We've

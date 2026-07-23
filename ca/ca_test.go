@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -697,4 +698,35 @@ func TestCARenew(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCA_DisableTLS(t *testing.T) {
+	config, err := authority.LoadConfiguration("testdata/ca.json")
+	assert.FatalError(t, err)
+	config.DisableTLS = true
+
+	ca, err := New(config)
+	assert.FatalError(t, err)
+	assert.True(t, ca.srv.TLSConfig == nil)
+	assert.True(t, ca.renewer == nil)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	assert.FatalError(t, err)
+	go func() {
+		_ = ca.srv.Serve(ln)
+	}()
+	defer ca.srv.Shutdown() //nolint:errcheck
+
+	resp, err := http.Get("http://" + ln.Addr().String() + "/health")
+	assert.FatalError(t, err)
+	defer resp.Body.Close()
+	assert.Equals(t, resp.StatusCode, http.StatusOK)
+
+	// Confirm the port genuinely does not speak TLS.
+	raw, err := net.Dial("tcp", ln.Addr().String())
+	assert.FatalError(t, err)
+	defer raw.Close()
+	tlsConn := tls.Client(raw, &tls.Config{InsecureSkipVerify: true}) //nolint:gosec
+	defer tlsConn.Close()
+	assert.NotNil(t, tlsConn.Handshake())
 }

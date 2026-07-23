@@ -211,12 +211,24 @@ func (ca *CA) Init(cfg *config.Config) (*CA, error) {
 
 	var tlsConfig *tls.Config
 	var clientTLSConfig *tls.Config
-	if ca.opts.tlsConfig != nil {
+	switch {
+	case ca.opts.tlsConfig != nil:
 		// try using the tls Configuration supplied by the caller
 		log.Print("Using tls configuration supplied by the application")
 		tlsConfig = ca.opts.tlsConfig
 		clientTLSConfig = ca.opts.tlsConfig
-	} else {
+	case cfg.DisableTLS:
+		// the primary address is served over plain HTTP; do not sign a TLS
+		// server certificate with the intermediate key for it.
+		log.Println("WARNING: TLS is disabled on the primary server address (disableTLS: true); " +
+			"the CA will not sign a server certificate for this port. mTLS-based renewal " +
+			"(POST /renew), rekey (POST /rekey) and mTLS-based revoke (POST /revoke) will not " +
+			"work over this port; use token-based flows instead.")
+		clientTLSConfig, err = ca.getWebhookClientTLSConfig(auth)
+		if err != nil {
+			return nil, err
+		}
+	default:
 		// default to using the step-ca x509 Signer Interface
 		log.Print("Building new tls configuration using step-ca x509 Signer Interface")
 		tlsConfig, clientTLSConfig, err = ca.getTLSConfig(auth)
@@ -431,7 +443,11 @@ func (ca *CA) Run() error {
 			log.Printf("Current context: %s", step.Contexts().GetCurrent().Name)
 		}
 		log.Printf("Config file: %s", ca.getConfigFileOutput())
-		baseURL := fmt.Sprintf("https://%s%s",
+		scheme := "https"
+		if ca.config.DisableTLS {
+			scheme = "http"
+		}
+		baseURL := fmt.Sprintf("%s://%s%s", scheme,
 			authorityInfo.DNSNames[0],
 			ca.config.Address[strings.LastIndex(ca.config.Address, ":"):])
 		log.Printf("The primary server URL is %s", baseURL)
@@ -604,6 +620,21 @@ func (ca *CA) Reload() error {
 	_, _ = daemon.SdNotify(true, daemon.SdNotifyReady)
 
 	return nil
+}
+
+// getWebhookClientTLSConfig builds a client tls.Config that trusts this CA's
+// own root certificates in addition to the system trust store, for use by
+// the webhook HTTP client. Unlike getTLSConfig, it does not sign a server
+// certificate and is used when TLS is disabled on the primary address.
+func (ca *CA) getWebhookClientTLSConfig(auth *authority.Authority) (*tls.Config, error) {
+	rootCAsPool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
+	for _, crt := range auth.GetRootCertificates() {
+		rootCAsPool.AddCert(crt)
+	}
+	return &tls.Config{RootCAs: rootCAsPool}, nil
 }
 
 // get TLSConfig returns separate TLSConfigs for server and client with the

@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Add `allowNoExpiryCert` provisioner claim to opt in to issuing certificates
   with the RFC 5280 Section 4.1.2.5 "no well-defined expiration date" sentinel
   value
+- Add `disableTLS` configuration option to serve the CA's primary `address`
+  over plain HTTP instead of HTTPS. When enabled, the CA no longer signs a
+  server TLS certificate with the intermediate key for that port; mTLS-based
+  `/renew`, `/rekey` and `/revoke` are unavailable in this mode (use
+  token-based flows instead)
 
 ### Changed
 

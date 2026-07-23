@@ -157,7 +157,11 @@ type baseURLKey struct{}
 func newBaseURLContext(ctx context.Context, r *http.Request) context.Context {
 	var u *url.URL
 	if r.Host != "" {
-		u = &url.URL{Scheme: "https", Host: r.Host}
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		u = &url.URL{Scheme: scheme, Host: r.Host}
 	}
 	return context.WithValue(ctx, baseURLKey{}, u)
 }

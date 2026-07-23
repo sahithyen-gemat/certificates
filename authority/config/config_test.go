@@ -204,6 +204,35 @@ func TestConfigValidate(t *testing.T) {
 				err: errors.New("tls minVersion cannot exceed tls maxVersion"),
 			}
 		},
+		"disable-tls-address-still-required": func(t *testing.T) ConfigValidateTest {
+			return ConfigValidateTest{
+				config: &Config{
+					DisableTLS:       true,
+					Root:             []string{"../testdata/secrets/root_ca.crt"},
+					IntermediateCert: "../testdata/secrets/intermediate_ca.crt",
+					IntermediateKey:  "../testdata/secrets/intermediate_ca_key",
+					DNSNames:         []string{"test.smallstep.com"},
+					Password:         "pass",
+					AuthorityConfig:  ac,
+				},
+				err: errors.New("address cannot be empty"),
+			}
+		},
+		"disable-tls-no-forced-tls-defaults": func(t *testing.T) ConfigValidateTest {
+			return ConfigValidateTest{
+				config: &Config{
+					Address:          "127.0.0.1:443",
+					DisableTLS:       true,
+					Root:             []string{"../testdata/secrets/root_ca.crt"},
+					IntermediateCert: "../testdata/secrets/intermediate_ca.crt",
+					IntermediateKey:  "../testdata/secrets/intermediate_ca_key",
+					DNSNames:         []string{"test.smallstep.com"},
+					Password:         "pass",
+					AuthorityConfig:  ac,
+				},
+				tls: nil,
+			}
+		},
 	}
 
 	for name, get := range tests {
@@ -328,7 +357,8 @@ func Test_toHostname(t *testing.T) {
 
 func TestConfig_Audience(t *testing.T) {
 	type fields struct {
-		DNSNames []string
+		DNSNames   []string
+		DisableTLS bool
 	}
 	type args struct {
 		path string
@@ -339,7 +369,7 @@ func TestConfig_Audience(t *testing.T) {
 		args   args
 		want   []string
 	}{
-		{"ok", fields{[]string{
+		{"ok", fields{DNSNames: []string{
 			"ca", "ca.example.com", "127.0.0.1", "::1",
 		}}, args{"/path"}, []string{
 			"https://ca/path",
@@ -348,15 +378,57 @@ func TestConfig_Audience(t *testing.T) {
 			"https://[::1]/path",
 			"/path",
 		}},
+		{"ok-disable-tls", fields{DNSNames: []string{
+			"ca", "ca.example.com", "127.0.0.1", "::1",
+		}, DisableTLS: true}, args{"/path"}, []string{
+			"http://ca/path",
+			"http://ca.example.com/path",
+			"http://127.0.0.1/path",
+			"http://[::1]/path",
+			"/path",
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &Config{
-				DNSNames: tt.fields.DNSNames,
+				DNSNames:   tt.fields.DNSNames,
+				DisableTLS: tt.fields.DisableTLS,
 			}
 			if got := c.Audience(tt.args.path); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Config.Audience() = %v, want %v", got, tt.want)
 			}
 		})
 	}
+}
+
+func TestConfig_GetAudiences(t *testing.T) {
+	c := &Config{
+		DNSNames: []string{"ca.example.com"},
+	}
+	audiences := c.GetAudiences()
+	assert.Equals(t, audiences.Sign, []string{
+		legacyAuthority,
+		"https://ca.example.com/1.0/sign",
+		"https://ca.example.com/sign",
+		"https://ca.example.com/1.0/ssh/sign",
+		"https://ca.example.com/ssh/sign",
+	})
+	assert.Equals(t, audiences.Renew, []string{
+		"https://ca.example.com/1.0/renew",
+		"https://ca.example.com/renew",
+	})
+
+	c.DisableTLS = true
+	audiences = c.GetAudiences()
+	assert.Equals(t, audiences.Sign, []string{
+		legacyAuthority,
+		"http://ca.example.com/1.0/sign",
+		"http://ca.example.com/sign",
+		"http://ca.example.com/1.0/ssh/sign",
+		"http://ca.example.com/ssh/sign",
+	})
+	assert.Equals(t, audiences.Renew, []string{
+		"http://ca.example.com/1.0/renew",
+		"http://ca.example.com/renew",
+	})
 }
