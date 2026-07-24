@@ -2,7 +2,10 @@ package acme
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
@@ -377,4 +380,54 @@ func TestLinker_LinkOrdersByAccountID(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestNewBaseURLContext(t *testing.T) {
+	newRequest := func(tlsConn bool) *http.Request {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Host = "ca.smallstep.com"
+		if tlsConn {
+			r.TLS = &tls.ConnectionState{}
+		}
+		return r
+	}
+
+	tests := []struct {
+		name       string
+		tlsConn    bool
+		scheme     string
+		wantScheme string
+	}{
+		{"http request, no override", false, "", "http"},
+		{"https request, no override", true, "", "https"},
+		{"http request, forced https override", false, "https", "https"},
+		{"https request, forced http override", true, "http", "http"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := newBaseURLContext(context.Background(), newRequest(tt.tlsConn), tt.scheme)
+			u := baseURLFromContext(ctx)
+			if assert.NotNil(t, u) {
+				assert.Equals(t, tt.wantScheme, u.Scheme)
+				assert.Equals(t, "ca.smallstep.com", u.Host)
+			}
+		})
+	}
+}
+
+func TestNewLinkerWithScheme(t *testing.T) {
+	// Simulates a CA running with disableTLS behind a reverse proxy that
+	// terminates TLS: the backend request never carries r.TLS, but the
+	// scheme override (as config.Config.Scheme() would supply) must still
+	// produce "https" links.
+	l := NewLinkerWithScheme("ca.smallstep.com", "acme", "https")
+	prov := mockProvisioner(t)
+	ctx := NewProvisionerContext(context.Background(), prov)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "ca.smallstep.com"
+	ctx = newBaseURLContext(ctx, req, l.(*linker).scheme)
+
+	escProvName := url.PathEscape(prov.GetName())
+	assert.Equals(t, fmt.Sprintf("https://ca.smallstep.com/acme/%s/directory", escProvName), l.GetLink(ctx, DirectoryLinkType))
 }

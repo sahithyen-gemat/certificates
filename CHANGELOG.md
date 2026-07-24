@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   server TLS certificate with the intermediate key for that port; mTLS-based
   `/renew`, `/rekey` and `/revoke` are unavailable in this mode (use
   token-based flows instead)
+- Add `audienceScheme` configuration option to pin the scheme (`http` or
+  `https`) used to build JWT audiences and ACME links, independent of
+  `disableTLS`. This is needed when a reverse proxy terminates TLS in front
+  of a `disableTLS` backend: clients see `https`, but the CA itself never
+  sees a TLS connection, so `disableTLS` alone would otherwise make it
+  compute and expect `http` audiences/links that no client can produce
 
 ### Changed
 

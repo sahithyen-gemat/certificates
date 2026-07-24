@@ -233,6 +233,38 @@ func TestConfigValidate(t *testing.T) {
 				tls: nil,
 			}
 		},
+		"fail-invalid-audience-scheme": func(t *testing.T) ConfigValidateTest {
+			return ConfigValidateTest{
+				config: &Config{
+					Address:          "127.0.0.1:443",
+					DisableTLS:       true,
+					AudienceScheme:   "ftp",
+					Root:             []string{"../testdata/secrets/root_ca.crt"},
+					IntermediateCert: "../testdata/secrets/intermediate_ca.crt",
+					IntermediateKey:  "../testdata/secrets/intermediate_ca_key",
+					DNSNames:         []string{"test.smallstep.com"},
+					Password:         "pass",
+					AuthorityConfig:  ac,
+				},
+				err: errors.New("audienceScheme must be 'http' or 'https'"),
+			}
+		},
+		"ok-audience-scheme-https-behind-proxy": func(t *testing.T) ConfigValidateTest {
+			return ConfigValidateTest{
+				config: &Config{
+					Address:          "127.0.0.1:443",
+					DisableTLS:       true,
+					AudienceScheme:   "https",
+					Root:             []string{"../testdata/secrets/root_ca.crt"},
+					IntermediateCert: "../testdata/secrets/intermediate_ca.crt",
+					IntermediateKey:  "../testdata/secrets/intermediate_ca_key",
+					DNSNames:         []string{"test.smallstep.com"},
+					Password:         "pass",
+					AuthorityConfig:  ac,
+				},
+				tls: nil,
+			}
+		},
 	}
 
 	for name, get := range tests {
@@ -357,8 +389,9 @@ func Test_toHostname(t *testing.T) {
 
 func TestConfig_Audience(t *testing.T) {
 	type fields struct {
-		DNSNames   []string
-		DisableTLS bool
+		DNSNames       []string
+		DisableTLS     bool
+		AudienceScheme string
 	}
 	type args struct {
 		path string
@@ -387,15 +420,56 @@ func TestConfig_Audience(t *testing.T) {
 			"http://[::1]/path",
 			"/path",
 		}},
+		{"ok-disable-tls-audience-scheme-https", fields{DNSNames: []string{
+			"ca", "ca.example.com", "127.0.0.1", "::1",
+		}, DisableTLS: true, AudienceScheme: "https"}, args{"/path"}, []string{
+			"https://ca/path",
+			"https://ca.example.com/path",
+			"https://127.0.0.1/path",
+			"https://[::1]/path",
+			"/path",
+		}},
+		{"ok-audience-scheme-overrides-tls-enabled", fields{DNSNames: []string{
+			"ca", "ca.example.com", "127.0.0.1", "::1",
+		}, DisableTLS: false, AudienceScheme: "http"}, args{"/path"}, []string{
+			"http://ca/path",
+			"http://ca.example.com/path",
+			"http://127.0.0.1/path",
+			"http://[::1]/path",
+			"/path",
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &Config{
-				DNSNames:   tt.fields.DNSNames,
-				DisableTLS: tt.fields.DisableTLS,
+				DNSNames:       tt.fields.DNSNames,
+				DisableTLS:     tt.fields.DisableTLS,
+				AudienceScheme: tt.fields.AudienceScheme,
 			}
 			if got := c.Audience(tt.args.path); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Config.Audience() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConfig_Scheme(t *testing.T) {
+	tests := []struct {
+		name           string
+		disableTLS     bool
+		audienceScheme string
+		want           string
+	}{
+		{"tls-enabled", false, "", "https"},
+		{"disable-tls", true, "", "http"},
+		{"disable-tls-audience-scheme-https", true, "https", "https"},
+		{"tls-enabled-audience-scheme-http", false, "http", "http"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Config{DisableTLS: tt.disableTLS, AudienceScheme: tt.audienceScheme}
+			if got := c.Scheme(); got != tt.want {
+				t.Errorf("Config.Scheme() = %v, want %v", got, tt.want)
 			}
 		})
 	}

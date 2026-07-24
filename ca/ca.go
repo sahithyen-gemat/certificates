@@ -282,7 +282,7 @@ func (ca *CA) Init(cfg *config.Config) (*CA, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error configuring ACME DB interface: %w", err)
 		}
-		acmeLinker = acme.NewLinker(dns, "acme")
+		acmeLinker = acme.NewLinkerWithScheme(dns, "acme", cfg.Scheme())
 		mux.Route("/acme", func(r chi.Router) {
 			acmeAPI.Route(r)
 		})

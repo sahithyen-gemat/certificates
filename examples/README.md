@@ -327,6 +327,32 @@ authentication behave differently:
 `insecureAddress` is unrelated to this setting: it configures a second,
 always-plain listener used only for SCEP and CRL endpoints.
 
+### Behind a TLS-terminating reverse proxy
+
+`disableTLS` also changes the scheme step-ca uses when it builds JWT
+audiences (for `/1.0/sign`, `/renew`, `/revoke`, etc.) and ACME links: with
+`disableTLS: true`, both switch from `https` to `http`. This is correct when
+clients genuinely reach the CA over plain HTTP, but not when a reverse proxy
+in front of the CA terminates TLS and forwards requests to the `disableTLS`
+backend over HTTP — clients still use `https://` URLs and tokens, while the
+CA itself computes `http` audiences/links that no client can match, causing
+every token-based request to fail with an invalid-audience error.
+
+Set `"audienceScheme": "https"` to pin the scheme independently of
+`disableTLS`:
+
+```json
+{
+	"address": "127.0.0.1:9000",
+	"disableTLS": true,
+	"audienceScheme": "https",
+	...
+}
+```
+
+`audienceScheme` must be `"http"` or `"https"` if set. Leave it unset to keep
+the default behavior of deriving the scheme from `disableTLS`.
+
 ## Certificate rotation
 
 We can use the bootstrap-server to demonstrate certificate rotation. We've

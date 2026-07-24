@@ -96,8 +96,20 @@ func GetUnescapedPathSuffix(typ LinkType, provisionerName string, inputs ...stri
 	}
 }
 
-// NewLinker returns a new Directory type.
+// NewLinker returns a new Directory type. The scheme used for generated
+// links is derived per-request from the incoming connection (TLS or not).
 func NewLinker(dns, prefix string) Linker {
+	return NewLinkerWithScheme(dns, prefix, "")
+}
+
+// NewLinkerWithScheme returns a new Directory type. If scheme is non-empty,
+// it is used for every generated link instead of deriving the scheme from
+// the incoming request's TLS state. This is needed when the CA is running
+// with disableTLS behind a reverse proxy that terminates TLS itself: the
+// backend never sees a TLS connection, so the per-request derivation would
+// otherwise always produce "http" links even though clients reach the CA
+// over "https". Pass config.Config.Scheme() as scheme in that case.
+func NewLinkerWithScheme(dns, prefix, scheme string) Linker {
 	_, _, err := net.SplitHostPort(dns)
 	if err != nil && strings.Contains(err.Error(), "too many colons in address") {
 		// this is most probably an IPv6 without brackets, e.g. ::1, 2001:0db8:85a3:0000:0000:8a2e:0370:7334
@@ -112,7 +124,7 @@ func NewLinker(dns, prefix string) Linker {
 			dns = "[" + dns + "]"
 		}
 	}
-	return &linker{prefix: prefix, dns: dns}
+	return &linker{prefix: prefix, dns: dns, scheme: scheme}
 }
 
 // Linker interface for generating links for ACME resources.
@@ -154,12 +166,14 @@ func MustLinkerFromContext(ctx context.Context) Linker {
 
 type baseURLKey struct{}
 
-func newBaseURLContext(ctx context.Context, r *http.Request) context.Context {
+func newBaseURLContext(ctx context.Context, r *http.Request, scheme string) context.Context {
 	var u *url.URL
 	if r.Host != "" {
-		scheme := "http"
-		if r.TLS != nil {
-			scheme = "https"
+		if scheme == "" {
+			scheme = "http"
+			if r.TLS != nil {
+				scheme = "https"
+			}
 		}
 		u = &url.URL{Scheme: scheme, Host: r.Host}
 	}
@@ -177,6 +191,7 @@ func baseURLFromContext(ctx context.Context) *url.URL {
 type linker struct {
 	prefix string
 	dns    string
+	scheme string
 }
 
 // Middleware gets the provisioner and current url from the request and sets
@@ -184,7 +199,7 @@ type linker struct {
 func (l *linker) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Add base url to the context.
-		ctx := newBaseURLContext(r.Context(), r)
+		ctx := newBaseURLContext(r.Context(), r, l.scheme)
 
 		// Add provisioner to the context.
 		nameEscaped := chi.URLParam(r, "provisionerID")

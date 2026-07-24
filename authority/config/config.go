@@ -85,6 +85,7 @@ type Config struct {
 	AuthorityConfig  *AuthConfig          `json:"authority,omitempty"`
 	TLS              *TLSOptions          `json:"tls,omitempty"`
 	DisableTLS       bool                 `json:"disableTLS,omitempty"`
+	AudienceScheme   string               `json:"audienceScheme,omitempty"`
 	Password         string               `json:"password,omitempty"`
 	Templates        *templates.Templates `json:"templates,omitempty"`
 	CommonName       string               `json:"commonName,omitempty"`
@@ -313,6 +314,8 @@ func (c *Config) Validate() error {
 		return errors.New("dnsNames cannot be empty")
 	case c.AuthorityConfig == nil:
 		return errors.New("authority cannot be nil")
+	case c.AudienceScheme != "" && c.AudienceScheme != "http" && c.AudienceScheme != "https":
+		return errors.New("audienceScheme must be 'http' or 'https'")
 	}
 
 	// Options holds the RA/CAS configuration.
@@ -400,7 +403,7 @@ func (c *Config) GetAudiences() provisioner.Audiences {
 		SSHRenew:  []string{},
 	}
 
-	scheme := c.scheme()
+	scheme := c.Scheme()
 	for _, name := range c.DNSNames {
 		hostname := toHostname(name)
 		audiences.Sign = append(audiences.Sign,
@@ -433,9 +436,19 @@ func (c *Config) GetAudiences() provisioner.Audiences {
 	return audiences
 }
 
-// scheme returns the URL scheme used to reach the CA over its primary
-// Address, which depends on whether TLS has been disabled.
-func (c *Config) scheme() string {
+// Scheme returns the URL scheme used to reach the CA over its primary
+// Address, which depends on whether TLS has been disabled. Callers outside
+// this package that need to construct CA-facing URLs consistently (e.g. the
+// ACME link generator) should use this instead of re-deriving the scheme
+// from DisableTLS themselves.
+func (c *Config) Scheme() string {
+	// AudienceScheme lets a CA behind a TLS-terminating reverse proxy
+	// (disableTLS on the backend, TLS on the public-facing address) advertise
+	// the scheme its clients actually connect with, independent of whether
+	// this instance serves TLS itself.
+	if c.AudienceScheme != "" {
+		return c.AudienceScheme
+	}
 	if c.DisableTLS {
 		return "http"
 	}
@@ -445,7 +458,7 @@ func (c *Config) scheme() string {
 // Audience returns the list of audiences for a given path.
 func (c *Config) Audience(path string) []string {
 	audiences := make([]string, len(c.DNSNames)+1)
-	scheme := c.scheme()
+	scheme := c.Scheme()
 	for i, name := range c.DNSNames {
 		hostname := toHostname(name)
 		audiences[i] = scheme + "://" + hostname + path
